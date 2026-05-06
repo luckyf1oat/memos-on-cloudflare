@@ -95,7 +95,7 @@ async function resolveCreatorUsernames(db: D1Database, memos: memoDB.MemoRow[]):
 memoRoutes.post("/", authRequired, async (c) => {
   const user = c.get("user");
   const body = await c.req.json();
-  const { content, visibility, createTime, updateTime } = body;
+  const { content, visibility, createTime, updateTime, location } = body;
 
   if (!content && content !== "") {
     return c.json({ error: "Content is required" }, 400);
@@ -113,7 +113,10 @@ memoRoutes.post("/", authRequired, async (c) => {
   }
 
   const uid = generateUid();
-  const payload = parseMemoPayload(content || "");
+  const payload = {
+    ...parseMemoPayload(content || ""),
+    ...(location ? { location } : {}),
+  };
 
   const createdTs = createTime ? Math.floor(new Date(createTime).getTime() / 1000) : undefined;
   const updatedTs = updateTime ? Math.floor(new Date(updateTime).getTime() / 1000) : undefined;
@@ -276,6 +279,13 @@ memoRoutes.patch("/:id", authRequired, async (c) => {
     const existingPayload = JSON.parse(memo.payload || "{}");
     updateData.payload = JSON.stringify({ ...existingPayload, ...payload });
   }
+  if (body.location !== undefined) {
+    const existingPayload = JSON.parse((updateData.payload as string) || memo.payload || "{}");
+    updateData.payload = JSON.stringify({
+      ...existingPayload,
+      ...(body.location ? { location: body.location } : { location: null }),
+    });
+  }
   if (body.visibility !== undefined) updateData.visibility = body.visibility;
   if (body.pinned !== undefined) updateData.pinned = body.pinned ? 1 : 0;
   if (body.rowStatus !== undefined) updateData.row_status = body.rowStatus;
@@ -354,7 +364,10 @@ memoRoutes.post("/:id/comments", authRequired, async (c) => {
 
   const body = await c.req.json();
   const uid = generateUid();
-  const payload = parseMemoPayload(body.content || "");
+  const payload = {
+    ...parseMemoPayload(body.content || ""),
+    ...(body.location ? { location: body.location } : {}),
+  };
 
   const comment = await memoDB.createMemo(c.env.DB, {
     uid,

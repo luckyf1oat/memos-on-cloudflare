@@ -54,6 +54,7 @@ export const memoServiceClient = {
     if (paths.includes("state") || memo.state !== undefined) body.rowStatus = memo.state === 2 ? "ARCHIVED" : "NORMAL";
     if (paths.includes("create_time") && memo.createTime) body.createTime = timestampToISO(memo.createTime);
     if (paths.includes("update_time") && memo.updateTime) body.updateTime = timestampToISO(memo.updateTime);
+    if (paths.includes("location") || memo.location !== undefined) body.location = memo.location;
 
     const data = await apiRequest<any>("PATCH", `/api/v1/memos/${id}`, body);
     return normalizeMemo(data);
@@ -97,10 +98,11 @@ export const memoServiceClient = {
   async createMemoComment(req: { name: string; comment: any }) {
     const id = extractId(req.name, "memos/");
     const comment = req.comment || {};
-    const body = {
+    const body: any = {
       content: comment.content ?? "",
       visibility: visibilityToString(comment.visibility),
     };
+    if (comment.location) body.location = comment.location;
     const data = await apiRequest<any>("POST", `/api/v1/memos/${id}/comments`, body);
     return normalizeMemo(data);
   },
@@ -511,9 +513,25 @@ export const instanceServiceClient = {
     const setting = req.setting || {};
     const name = setting.name; // e.g. "instance/settings/GENERAL"
     const innerValue = setting.value?.value ?? setting.value ?? {};
-    return apiRequest<any>("PATCH", `/api/v1/${name}`, {
+    await apiRequest<any>("PATCH", `/api/v1/${name}`, {
       value: JSON.stringify(innerValue),
     });
+    const keyName = name.split("/").pop() || "";
+    const caseMap: Record<string, string> = {
+      GENERAL: "generalSetting",
+      MEMO_RELATED: "memoRelatedSetting",
+      STORAGE: "storageSetting",
+      TAGS: "tagsSetting",
+      NOTIFICATION: "notificationSetting",
+      AI: "aiSetting",
+    };
+    return {
+      name,
+      value: {
+        case: caseMap[keyName] || setting.value?.case,
+        value: innerValue,
+      },
+    };
   },
 
   async listInstanceSettings(_req?: any) {

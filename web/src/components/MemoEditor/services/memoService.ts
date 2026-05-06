@@ -98,6 +98,19 @@ export const memoService = {
         memo: create(MemoSchema, patch as Record<string, unknown>),
         updateMask: create(FieldMaskSchema, { paths: Array.from(mask) }),
       });
+
+      if (mask.has("attachments")) {
+        await memoServiceClient.setMemoAttachments({
+          name: memo.name,
+          attachments: allAttachments,
+        });
+      }
+      if (mask.has("relations")) {
+        await memoServiceClient.setMemoRelations({
+          name: memo.name,
+          relations: state.metadata.relations,
+        });
+      }
       return { memoName: memo.name, hasChanges: true };
     }
 
@@ -118,6 +131,19 @@ export const memoService = {
           comment: memoData,
         })
       : await memoServiceClient.createMemo({ memo: memoData });
+
+    if (allAttachments.length > 0) {
+      await memoServiceClient.setMemoAttachments({
+        name: memo.name,
+        attachments: allAttachments,
+      });
+    }
+    if (state.metadata.relations.length > 0) {
+      await memoServiceClient.setMemoRelations({
+        name: memo.name,
+        relations: state.metadata.relations,
+      });
+    }
 
     return { memoName: memo.name, hasChanges: true };
   },
