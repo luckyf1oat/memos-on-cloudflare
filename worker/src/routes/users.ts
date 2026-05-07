@@ -9,6 +9,7 @@ import { hashPassword } from "../auth/password";
 import { generatePAT, hashPAT } from "../auth/pat";
 import { exchangeOAuthCode } from "../auth/oauth";
 import { createErrorBody } from "../error";
+import { buildIdentityProviderName, extractIdentityProviderUid } from "../idp";
 
 type UserApp = { Bindings: Env; Variables: { user: UserPayload } };
 
@@ -405,7 +406,7 @@ userRoutes.get("/:username/linkedIdentities", authRequired, async (c) => {
 
   const linkedIdentities = (results || []).map((row) => ({
     name: `users/${username}/linkedIdentities/${row.id}`,
-    idpName: `identityProviders/${row.provider}`,
+    idpName: buildIdentityProviderName(row.provider),
     externUid: row.extern_uid,
   }));
 
@@ -422,7 +423,7 @@ userRoutes.post("/:username/linkedIdentities", authRequired, async (c) => {
   }
 
   const body = await c.req.json<{ idpName?: string; code?: string; redirectUri?: string; codeVerifier?: string }>();
-  const idpUid = (body.idpName || "").replace("identityProviders/", "");
+  const idpUid = extractIdentityProviderUid(body.idpName);
   if (!idpUid || !body.code) {
     return c.json({ error: "Missing IDP name or authorization code" }, 400);
   }
@@ -442,7 +443,7 @@ userRoutes.post("/:username/linkedIdentities", authRequired, async (c) => {
 
   return c.json({
     name: `users/${username}/linkedIdentities/${result!.id}`,
-    idpName: `identityProviders/${result!.provider}`,
+    idpName: buildIdentityProviderName(result!.provider),
     externUid: result!.extern_uid,
   }, 201);
 });

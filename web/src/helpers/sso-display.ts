@@ -65,7 +65,7 @@ export function getIdentifierFilterSummary(filter: string, t: Translate): string
 }
 
 export function getOAuth2SummaryItems(provider: IdentityProvider, t: Translate): SummaryItem[] {
-  const oauth2Config = provider.config?.config.case === "oauth2Config" ? provider.config.config.value : undefined;
+  const oauth2Config = provider.config?.config?.case === "oauth2Config" ? provider.config.config.value : undefined;
   if (!oauth2Config) {
     return [];
   }

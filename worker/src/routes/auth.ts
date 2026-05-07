@@ -8,6 +8,7 @@ import { authRequired } from "../middleware/auth";
 import { findUserByUsername, findUserById, createUser, countUsers } from "../db/user";
 import * as settingDB from "../db/setting";
 import { createErrorBody } from "../error";
+import { extractIdentityProviderUid } from "../idp";
 
 type AuthApp = { Bindings: Env; Variables: { user: UserPayload } };
 
@@ -33,7 +34,7 @@ authRoutes.post("/signin", async (c) => {
 
   if (body.credentials?.case === "ssoCredentials") {
     const { idpName, code, redirectUri, codeVerifier } = body.credentials.value;
-    const idpUid = (idpName || "").replace("identityProviders/", "");
+    const idpUid = extractIdentityProviderUid(idpName);
     if (!idpUid || !code) {
       return c.json({ error: "Missing IDP name or authorization code" }, 400);
     }

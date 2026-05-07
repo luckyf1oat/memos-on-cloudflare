@@ -1,32 +1,10 @@
+import { normalizeStoredOAuth2Config, type IdpRow } from "../idp";
+
 export interface OAuthUserInfo {
   identifier: string;
   displayName: string;
   email: string;
   avatarUrl: string;
-}
-
-interface IdpRow {
-  id: number;
-  uid: string;
-  name: string;
-  type: string;
-  identifier_filter: string;
-  config: string;
-}
-
-interface OAuth2Config {
-  clientId: string;
-  clientSecret: string;
-  authUrl: string;
-  tokenUrl: string;
-  userInfoUrl: string;
-  scopes: string[];
-  fieldMapping: {
-    identifier: string;
-    displayName: string;
-    email: string;
-    avatarUrl: string;
-  };
 }
 
 export async function getIdpByUid(db: D1Database, uid: string): Promise<IdpRow | null> {
@@ -43,7 +21,7 @@ export async function exchangeOAuthCode(
   const idp = await getIdpByUid(db, idpUid);
   if (!idp) throw new Error("Identity provider not found");
 
-  const config: OAuth2Config = JSON.parse(idp.config);
+  const config = normalizeStoredOAuth2Config(idp.config);
   if (!config.clientId || !config.tokenUrl || !config.userInfoUrl) {
     throw new Error("Identity provider configuration is incomplete");
   }

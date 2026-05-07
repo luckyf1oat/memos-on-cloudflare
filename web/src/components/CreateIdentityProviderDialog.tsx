@@ -183,7 +183,7 @@ function normalizeScopes(value: string): string[] {
 function buildDialogStateFromTemplate(templateName: string) {
   const template = templateList.find((item) => item.title === templateName) ?? templateList[0];
   const oauth2Config =
-    template.type === IdentityProvider_Type.OAUTH2 && template.config?.config.case === "oauth2Config"
+    template.type === IdentityProvider_Type.OAUTH2 && template.config?.config?.case === "oauth2Config"
       ? create(OAuth2ConfigSchema, template.config.config.value)
       : createEmptyOAuth2Config();
 
@@ -201,7 +201,7 @@ function buildDialogStateFromTemplate(templateName: string) {
 
 function buildDialogStateFromProvider(identityProvider: IdentityProvider) {
   const oauth2Config =
-    identityProvider.type === IdentityProvider_Type.OAUTH2 && identityProvider.config?.config.case === "oauth2Config"
+    identityProvider.type === IdentityProvider_Type.OAUTH2 && identityProvider.config?.config?.case === "oauth2Config"
       ? create(OAuth2ConfigSchema, identityProvider.config.config.value)
       : createEmptyOAuth2Config();
 

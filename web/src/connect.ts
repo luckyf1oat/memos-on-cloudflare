@@ -410,7 +410,7 @@ export const userServiceClient = {
   async listLinkedIdentities(req: { parent: string }) {
     const username = extractId(req.parent, "users/");
     const data = await apiRequest<any>("GET", `/api/v1/users/${username}/linkedIdentities`).catch(() => ({ linkedIdentities: [] }));
-    return { linkedIdentities: data.linkedIdentities || [] };
+    return { linkedIdentities: (data.linkedIdentities || []).map(normalizeLinkedIdentity) };
   },
 
   async createLinkedIdentity(req: { parent: string; idpName?: string; code?: string; redirectUri?: string; codeVerifier?: string }) {
@@ -614,21 +614,24 @@ export const shortcutServiceClient = {
 
 export const identityProviderServiceClient = {
   async listIdentityProviders(_req?: any) {
-    return apiRequest<any>("GET", "/api/v1/idps").catch(() => ({ identityProviders: [] }));
+    const data = await apiRequest<any>("GET", "/api/v1/idps").catch(() => ({ identityProviders: [] }));
+    return { identityProviders: (data.identityProviders || []).map(normalizeIdentityProvider) };
   },
 
   async createIdentityProvider(req: { identityProvider: any; identityProviderId?: string }) {
-    return apiRequest<any>("POST", "/api/v1/idps", req.identityProvider);
+    const data = await apiRequest<any>("POST", "/api/v1/idps", buildIdentityProviderPayload(req.identityProvider, req.identityProviderId));
+    return normalizeIdentityProvider(data);
   },
 
   async updateIdentityProvider(req: { identityProvider: any; updateMask?: any }) {
     const idp = req.identityProvider || {};
-    const id = extractId(idp.name, "identityProviders/");
-    return apiRequest<any>("PATCH", `/api/v1/idps/${id}`, idp);
+    const id = extractIdentityProviderUid(idp.name || "");
+    const data = await apiRequest<any>("PATCH", `/api/v1/idps/${id}`, buildIdentityProviderPayload(idp));
+    return normalizeIdentityProvider(data);
   },
 
   async deleteIdentityProvider(req: { name: string }) {
-    const id = extractId(req.name, "identityProviders/");
+    const id = extractIdentityProviderUid(req.name);
     await apiRequest<any>("DELETE", `/api/v1/idps/${id}`);
   },
 };
@@ -766,4 +769,169 @@ function normalizeShare(s: any): any {
     createTime: s.created_ts ? { seconds: s.created_ts, nanos: 0 } : undefined,
     expireTime: s.expires_ts ? { seconds: s.expires_ts, nanos: 0 } : undefined,
   };
+}
+
+const IDENTITY_PROVIDER_NAME_PREFIX = "identity-providers/";
+const LEGACY_IDENTITY_PROVIDER_NAME_PREFIX = "identityProviders/";
+
+function buildIdentityProviderPayload(identityProvider: any, identityProviderId?: string): any {
+  return {
+    identityProviderId: identityProviderId || extractIdentityProviderUid(identityProvider?.name || ""),
+    title: identityProvider?.title || "",
+    type: normalizeIdentityProviderTypeForRequest(identityProvider?.type),
+    identifierFilter: identityProvider?.identifierFilter ?? identityProvider?.identifier_filter ?? "",
+    config: normalizeOAuth2Config(identityProvider?.config) || {},
+  };
+}
+
+function normalizeIdentityProvider(data: any): any {
+  if (!data) return data;
+
+  const uid = data.uid || extractIdentityProviderUid(data.name || "");
+  const rawName = typeof data.name === "string" ? data.name : "";
+  const hasResourceName = rawName.startsWith(IDENTITY_PROVIDER_NAME_PREFIX) || rawName.startsWith(LEGACY_IDENTITY_PROVIDER_NAME_PREFIX);
+  const oauth2Config = normalizeOAuth2Config(data.config);
+  const title =
+    typeof data.title === "string" && data.title.trim() ? data.title : !hasResourceName && rawName.trim() ? rawName : uid || "OAuth2";
+
+  return {
+    ...data,
+    name: normalizeIdentityProviderName(rawName, uid),
+    title,
+    type: normalizeIdentityProviderType(data.type),
+    identifierFilter: data.identifierFilter ?? data.identifier_filter ?? "",
+    config: wrapIdentityProviderConfig(oauth2Config),
+  };
+}
+
+function normalizeLinkedIdentity(data: any): any {
+  if (!data) return data;
+  return {
+    ...data,
+    idpName: normalizeIdentityProviderName(data.idpName || ""),
+  };
+}
+
+function normalizeIdentityProviderName(name: string, fallbackUid = ""): string {
+  const uid = isIdentityProviderResourceName(name) ? extractIdentityProviderUid(name) : fallbackUid || name;
+  return uid ? `${IDENTITY_PROVIDER_NAME_PREFIX}${uid}` : "";
+}
+
+function extractIdentityProviderUid(name: string): string {
+  if (!name) return "";
+  if (name.startsWith(IDENTITY_PROVIDER_NAME_PREFIX)) return name.slice(IDENTITY_PROVIDER_NAME_PREFIX.length);
+  if (name.startsWith(LEGACY_IDENTITY_PROVIDER_NAME_PREFIX)) return name.slice(LEGACY_IDENTITY_PROVIDER_NAME_PREFIX.length);
+  return name;
+}
+
+function isIdentityProviderResourceName(name: string): boolean {
+  return name.startsWith(IDENTITY_PROVIDER_NAME_PREFIX) || name.startsWith(LEGACY_IDENTITY_PROVIDER_NAME_PREFIX);
+}
+
+function normalizeIdentityProviderType(value: any): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  return typeof value === "string" && value.toLowerCase() === "oauth2" ? 1 : 0;
+}
+
+function normalizeIdentityProviderTypeForRequest(value: any): string {
+  return normalizeIdentityProviderType(value) === 1 ? "oauth2" : "oauth2";
+}
+
+function normalizeOAuth2Config(value: any): any | undefined {
+  const raw = unwrapOAuth2Config(value);
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+
+  const fieldMapping = raw.fieldMapping ?? raw.field_mapping ?? {};
+  const config = {
+    clientId: typeof raw.clientId === "string" ? raw.clientId : typeof raw.client_id === "string" ? raw.client_id : "",
+    clientSecret: typeof raw.clientSecret === "string" ? raw.clientSecret : typeof raw.client_secret === "string" ? raw.client_secret : "",
+    authUrl: typeof raw.authUrl === "string" ? raw.authUrl : typeof raw.auth_url === "string" ? raw.auth_url : "",
+    tokenUrl: typeof raw.tokenUrl === "string" ? raw.tokenUrl : typeof raw.token_url === "string" ? raw.token_url : "",
+    userInfoUrl: typeof raw.userInfoUrl === "string" ? raw.userInfoUrl : typeof raw.user_info_url === "string" ? raw.user_info_url : "",
+    scopes: Array.isArray(raw.scopes) ? raw.scopes.map((scope: unknown) => String(scope)).filter(Boolean) : [],
+    fieldMapping: {
+      identifier: typeof fieldMapping.identifier === "string" ? fieldMapping.identifier : "",
+      displayName:
+        typeof fieldMapping.displayName === "string"
+          ? fieldMapping.displayName
+          : typeof fieldMapping.display_name === "string"
+            ? fieldMapping.display_name
+            : "",
+      email: typeof fieldMapping.email === "string" ? fieldMapping.email : "",
+      avatarUrl:
+        typeof fieldMapping.avatarUrl === "string"
+          ? fieldMapping.avatarUrl
+          : typeof fieldMapping.avatar_url === "string"
+            ? fieldMapping.avatar_url
+            : "",
+    },
+  };
+
+  return hasOAuth2Config(config) ? config : undefined;
+}
+
+function wrapIdentityProviderConfig(config: any): any {
+  if (!config) {
+    return {
+      config: {
+        case: undefined,
+        value: undefined,
+      },
+    };
+  }
+
+  return {
+    config: {
+      case: "oauth2Config",
+      value: config,
+    },
+  };
+}
+
+function hasOAuth2Config(config: any): boolean {
+  return Boolean(
+    config.clientId ||
+      config.clientSecret ||
+      config.authUrl ||
+      config.tokenUrl ||
+      config.userInfoUrl ||
+      config.scopes.length > 0 ||
+      config.fieldMapping.identifier ||
+      config.fieldMapping.displayName ||
+      config.fieldMapping.email ||
+      config.fieldMapping.avatarUrl,
+  );
+}
+
+function unwrapOAuth2Config(value: any): any {
+  const parsed = parsePossiblyJson(value);
+  if (!parsed || typeof parsed !== "object") {
+    return undefined;
+  }
+
+  if (parsed.config && typeof parsed.config === "object" && parsed.config.case === "oauth2Config" && parsed.config.value) {
+    return parsed.config.value;
+  }
+
+  if (parsed.case === "oauth2Config" && parsed.value) {
+    return parsed.value;
+  }
+
+  return parsed;
+}
+
+function parsePossiblyJson(value: any): any {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
 }
