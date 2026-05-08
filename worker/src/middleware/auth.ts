@@ -17,7 +17,7 @@ export const authRequired = createMiddleware<AuthEnv>(async (c, next) => {
   }
 
   if (!token) {
-    return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ code: 16, message: "user not found", details: [] }, 401);
   }
 
   // Check if it's a PAT
@@ -33,7 +33,7 @@ export const authRequired = createMiddleware<AuthEnv>(async (c, next) => {
       .first<{ user_id: number; username: string; role: string; row_status: string }>();
 
     if (!result) {
-      return c.json({ error: "Invalid access token" }, 401);
+      return c.json({ code: 16, message: "invalid access token", details: [] }, 401);
     }
 
     c.set("user", {
@@ -55,7 +55,7 @@ export const authRequired = createMiddleware<AuthEnv>(async (c, next) => {
     });
     return next();
   } catch {
-    return c.json({ error: "Invalid or expired token" }, 401);
+    return c.json({ code: 16, message: "token has expired", details: [] }, 401);
   }
 });
 
