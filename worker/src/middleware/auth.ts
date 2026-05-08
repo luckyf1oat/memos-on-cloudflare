@@ -8,6 +8,13 @@ type AuthEnv = {
   Variables: { user: UserPayload };
 };
 
+type PATLookupResult = {
+  user_id: number;
+  username: string;
+  role: string;
+  row_status: string;
+};
+
 function extractAuthToken(headers: {
   header: (name: string) => string | undefined;
 }): string | undefined {
@@ -34,6 +41,39 @@ function extractAuthToken(headers: {
   return undefined;
 }
 
+async function findUserByPATHash(db: D1Database, tokenHash: string): Promise<PATLookupResult | null> {
+  const { results } = await db.prepare(
+    `SELECT us.user_id, us.value, u.username, u.role, u.row_status
+     FROM user_setting us
+     JOIN user u ON u.id = us.user_id
+     WHERE us.key = 'personal_access_tokens'`
+  ).all<{
+    user_id: number;
+    value: string;
+    username: string;
+    role: string;
+    row_status: string;
+  }>();
+
+  for (const row of results || []) {
+    try {
+      const tokens = JSON.parse(row.value || "[]") as Array<{ hash?: string }>;
+      if (tokens.some((token) => token.hash === tokenHash)) {
+        return {
+          user_id: row.user_id,
+          username: row.username,
+          role: row.role,
+          row_status: row.row_status,
+        };
+      }
+    } catch {
+      // Ignore malformed PAT payloads and continue scanning.
+    }
+  }
+
+  return null;
+}
+
 export const authRequired = createMiddleware<AuthEnv>(async (c, next) => {
   const token = extractAuthToken(c.req);
 
@@ -44,14 +84,7 @@ export const authRequired = createMiddleware<AuthEnv>(async (c, next) => {
   // Check if it's a PAT
   if (token.startsWith("memos_pat_")) {
     const hash = await hashPAT(token);
-    const result = await c.env.DB.prepare(
-      `SELECT us.user_id, u.username, u.role, u.row_status
-       FROM user_setting us
-       JOIN user u ON u.id = us.user_id
-       WHERE us.key = 'personal_access_tokens' AND us.value LIKE ?`
-    )
-      .bind(`%${hash}%`)
-      .first<{ user_id: number; username: string; role: string; row_status: string }>();
+    const result = await findUserByPATHash(c.env.DB, hash);
 
     if (!result) {
       return c.json({ code: 16, message: "invalid access token", details: [] }, 401);
@@ -86,14 +119,7 @@ export const authOptional = createMiddleware<AuthEnv>(async (c, next) => {
   if (token) {
     if (token.startsWith("memos_pat_")) {
       const hash = await hashPAT(token);
-      const result = await c.env.DB.prepare(
-        `SELECT us.user_id, u.username, u.role, u.row_status
-         FROM user_setting us
-         JOIN user u ON u.id = us.user_id
-         WHERE us.key = 'personal_access_tokens' AND us.value LIKE ?`
-      )
-        .bind(`%${hash}%`)
-        .first<{ user_id: number; username: string; role: string; row_status: string }>();
+      const result = await findUserByPATHash(c.env.DB, hash);
 
       if (result) {
         c.set("user", {
