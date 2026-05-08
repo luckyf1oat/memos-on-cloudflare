@@ -31,4 +31,16 @@ app.route("/api/v1/sse", sseRoutes);
 app.route("/file", fileRoutes);
 app.route("/u", rssRoutes);
 
+app.notFound((c) => {
+  return c.json({ code: 5, message: "Not Found", details: [] }, 404);
+});
+
+app.onError((err, c) => {
+  if (err.message?.includes("Method Not Allowed")) {
+    return c.json({ code: 12, message: "Method Not Allowed", details: [] }, 405);
+  }
+  console.error(err);
+  return c.json({ code: 2, message: err.message || "Internal Server Error", details: [] }, 500);
+});
+
 export default app;
