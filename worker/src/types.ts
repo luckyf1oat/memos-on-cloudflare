@@ -4,6 +4,7 @@ export interface Env {
   AI: Ai;
   JWT_SECRET: string;
   INSTANCE_NAME: string;
+  APP_VERSION: string;
 }
 
 export interface UserPayload {

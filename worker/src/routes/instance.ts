@@ -3,6 +3,7 @@ import type { Env, UserPayload } from "../types";
 import { authRequired } from "../middleware/auth";
 import * as settingDB from "../db/setting";
 import * as userDB from "../db/user";
+import { getAppVersion } from "../version";
 
 type InstApp = { Bindings: Env; Variables: { user: UserPayload } };
 
@@ -46,7 +47,7 @@ instanceRoutes.get("/profile", async (c) => {
   }
 
   return c.json({
-    version: "1.0.0",
+    version: getAppVersion(c.env),
     mode: "prod",
     admin,
     ...profile,
