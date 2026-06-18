@@ -28,7 +28,22 @@ function wrangler(args) {
  */
 function wranglerJSON(args) {
   const output = wrangler(`${args} --json`);
-  return JSON.parse(output);
+  try {
+    return JSON.parse(output);
+  } catch {
+    return null;
+  }
+}
+
+/** Parse wrangler text output for database_id (from "d1 create" which has no --json) */
+/**
+ * @param {string} output
+ * @returns {string|null}
+ */
+function parseDatabaseId(output) {
+  // Match UUID pattern in output like "...database_id = 'efb2f813-...'"
+  const match = output.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : null;
 }
 
 /** Generate a cryptographically strong random JWT secret (64 hex chars = 256 bits) */
@@ -57,8 +72,12 @@ async function ensureD1Database() {
     console.log(`✓ D1 database "cfmemos-db" already exists (${databaseId})`);
   } else {
     console.log('Creating D1 database "cfmemos-db"...');
-    const result = wranglerJSON("d1 create cfmemos-db");
-    databaseId = result.uuid || result.database_id;
+    // "d1 create" does not support --json, must parse text output
+    const output = wrangler("d1 create cfmemos-db");
+    databaseId = parseDatabaseId(output);
+    if (!databaseId) {
+      throw new Error("Failed to parse database_id from wrangler d1 create output");
+    }
     console.log(`✓ Created D1 database "cfmemos-db" (${databaseId})`);
   }
 
@@ -149,7 +168,8 @@ async function main() {
   // Verify authentication
   try {
     const whoami = wrangler("whoami");
-    console.log(`Authenticated as: ${whoami.trim()}\n`);
+    console.log(whoami.trim());
+    console.log("");
   } catch {
     console.error(
       "❌ Not authenticated with Cloudflare. Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env vars."
