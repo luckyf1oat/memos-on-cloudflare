@@ -12,12 +12,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const WRANGLER_TOML_PATH = join(ROOT, "wrangler.toml");
 
+/**
+ * @param {string} args
+ * @returns {string}
+ */
 function wrangler(args) {
   const cmd = `npx wrangler ${args}`;
   console.log(`> ${cmd}`);
   return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "inherit"] });
 }
 
+/**
+ * @param {string} args
+ * @returns {any}
+ */
 function wranglerJSON(args) {
   const output = wrangler(`${args} --json`);
   return JSON.parse(output);
@@ -40,7 +48,7 @@ async function ensureD1Database() {
 
   const dbs = Array.isArray(d1List) ? d1List : (d1List.result || []);
   const existing = dbs.find(
-    (db) => db.name === "cfmemos-db"
+    /** @param {any} db */ (db) => db.name === "cfmemos-db"
   );
 
   let databaseId;
@@ -74,7 +82,7 @@ async function ensureR2Bucket() {
   }
 
   const buckets = r2List.buckets || [];
-  const existing = buckets.find((b) => b.name === "cfmemos");
+  const existing = buckets.find(/** @param {any} b */ (b) => b.name === "cfmemos");
 
   if (existing) {
     console.log(`✓ R2 bucket "cfmemos" already exists`);
